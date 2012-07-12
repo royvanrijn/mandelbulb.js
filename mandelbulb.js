@@ -1,3 +1,12 @@
+/*
+* To the extent possible under law, Roy van Rijn has waived all copyright and related or neighboring rights to mandelbulb.js. 
+* This work is published from: Nederland.
+* More information: https://github.com/royvanrijn/mandelbulb.js
+* And: http://www.redcode.nl
+* Feel free to add, change and use the following code, but please, keep this header included.
+*/
+
+/* Load the canvas */
 var mandelbulbCanvas = document.getElementById('mandelbulb');
 
 window.requestAnimFrame = (function(callback) {
@@ -7,9 +16,13 @@ window.requestAnimFrame = (function(callback) {
         window.oRequestAnimationFrame || 
         window.msRequestAnimationFrame ||
     function(callback) {
-        window.setTimeout(callback, 10);
+        window.setTimeout(callback, 0);
     };
 })();
+
+
+/* This is the main animation loop, calling the 'draw' method for each line
+   When the screen is fully rendered it will call 'animateCamera()' to change the view */
 
 var currenty = 0;
 var imageData;
@@ -17,16 +30,26 @@ var image;
 function animate() {
     var context = mandelbulbCanvas.getContext("2d");
 
-    context.fillRect(0, 0, mandelbulbCanvas.width, mandelbulbCanvas.height);
-
     if(image == null) {
+        context.fillRect(0, 0, mandelbulbCanvas.width, mandelbulbCanvas.height);
         image = context.getImageData(0, 0, mandelbulbCanvas.width, mandelbulbCanvas.height);
         imageData = image.data;
     }
-    imageData = draw(imageData, currenty++);
-    if(currenty > mandelbulbCanvas.height) {
+
+    if(currenty  == 0) {
         animateCamera();
-        currenty = 0;
+        setupScene();
+    }
+
+    // Draw some lines until we are drawing for N miliseconds, then do a callback
+    // This gives the browser some CPU cycles back
+    var start = new Date().getTime();
+    while(currenty < mandelbulbCanvas.height && (new Date().getTime()-start) < 200) {
+        imageData = draw(imageData, currenty++);
+    }
+
+    if(currenty >= mandelbulbCanvas.height) {
+	currenty = 0;
     }
 
     image.data = imageData;
@@ -37,46 +60,78 @@ function animate() {
     });
 }
 
-
 window.onload = function() {
     animate();
 };
 
 
-var scale = 140.0;
+/* The 'map' method describes the complete scene (min distance to the closest object) */
+
+var scale = 140.0; //The whole scene is scaled for some math related oddity
+
 var mapZ = new FastVec3(0.0, 0.0, 0.0);
-	
 function map(z) {
+    var distance = 99999999999; 
     mapZ.setTo(z);
     mapZ.scalarMultiply(1/scale);
-    return mandelbulb(mapZ) * scale;
-}
-	
-function dotProduct(v1, v2) {
-    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
-}
-	
-function length(otherVec) {
-    var part1 = (otherVec.x) * (otherVec.x);
-    var part2 = (otherVec.y) * (otherVec.y);
-    var part3 = (otherVec.z) * (otherVec.z);
-    var underRadical = part1 + part2 + part3;
-    return Math.sqrt(underRadical);
+    distance = Math.min(distance, (mandelbulb(mapZ) * scale));
+    //distance = Math.min(distance, (sphere(mapZ, new FastVec3(0.0, 0.0, 0.0), 1) * scale));
+    return distance;
 }
 
-function toRad(r) {
-    return r * Math.PI / 180.0;
+/**
+ * The mandelbulb from:
+ * http://blog.hvidtfeldts.net/index.php/2011/09/distance-estimated-3d-fractals-v-the-mandelbulb-different-de-approximations/
+ */
+var z = new FastVec3(0.0, 0.0, 0.0);
+var Iterations = 20.0;
+var Power = 8.0;
+function mandelbulb(pos) {
+    z.setTo(pos);
+    var dr = 1.0;
+    var r = 0.0;
+    for (var i = 0; i < Iterations ; i++) {
+        r = length(z);
+        if (r>DEPTH_OF_FIELD) break;
+
+        var theta = Math.acos(z.z/r);
+        var phi = Math.atan2(z.y,z.x);
+        dr =  Math.pow( r, Power-1.0)*Power*dr + 1.0;
+        var zr = Math.pow( r,Power);
+        theta = theta*Power;
+        phi = phi*Power;
+        z.x = Math.sin(theta)*Math.cos(phi);
+        z.y = Math.sin(phi)*Math.sin(theta);
+        z.z = Math.cos(theta);
+        z.scalarMultiply(zr);
+        z.add(pos);
+    }
+    return 0.5*Math.log(r)*r/dr;
 }
 
-function saturate(n) {
-    return clamp(n, 0.0, 1.0);
+/**
+ * A simple sphere distance estimation.
+ * More examples can be found here:
+ * http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+ */
+var sphereZ = new FastVec3(0,0,0);
+function sphere(z, sphereLocation, size) {
+    sphereZ.setTo(z);
+    sphereZ.subtract(sphereLocation);
+    return length(sphereZ) - size;
 }
 
-function clamp(n, min, max) {
-    return Math.max(min, Math.min(n, max));
-}
-
-function draw(imageData, y) {
+/**
+ * This method takes viewAngle and lightAngle and repositions:
+ *
+ * vec3: lightLocation
+ * vec3: lightDirection
+ * vec3: viewLocation
+ * vec3: viewDirection
+ * (and more)
+ *
+ */
+function setupScene() {
 
     var rad = toRad(lightAngle);
     var lightX = ((Math.cos(rad) * (DEPTH_OF_FIELD/2)));
@@ -112,7 +167,13 @@ function draw(imageData, y) {
     
     eyeLocation.setTo(nearFieldLocation);
     eyeLocation.subtract(reverseDirection);
+}
 
+/** 
+ * The main draw function for a scanline
+ * Make sure setupScene is called first after adjusting the camera and/or light
+ */	
+function draw(imageData, y) {
 
     	for(var x=0; x<mandelbulbCanvas.width; x++) {
         
@@ -262,6 +323,10 @@ var temp = new FastVec3(0.0, 0.0, 0.0);
 var ro = new FastVec3(0.0, 0.0, 0.0);
 var rd = new FastVec3(0.0, 0.0, 0.0);
 
+/**
+ * In this method we calculate the 'soft' shadows
+ * From: http://www.iquilezles.org/www/articles/rmshadows/rmshadows.htm
+ */
 function shadow(mint, maxt, k) {
     var res = 1.0;
     for(var t=mint; t < maxt; ) {
@@ -280,44 +345,42 @@ function shadow(mint, maxt, k) {
     return res;
 }
 
-var z = new FastVec3(0.0, 0.0, 0.0);
 /**
- * The mandelbulb from:
- * http://blog.hvidtfeldts.net/index.php/2011/09/distance-estimated-3d-fractals-v-the-mandelbulb-different-de-approximations/
+ * Here we change the camera position and light(s)
  */
-var Iterations = 20.0;
-var Power = 8.0;
-function mandelbulb(pos) {
-    z.setTo(pos);
-    var dr = 1.0;
-    var r = 0.0;
-    for (var i = 0; i < Iterations ; i++) {
-        r = length(z);
-        if (r>DEPTH_OF_FIELD) break;
-
-        var theta = Math.acos(z.z/r);
-        var phi = Math.atan2(z.y,z.x);
-        dr =  Math.pow( r, Power-1.0)*Power*dr + 1.0;
-        var zr = Math.pow( r,Power);
-        theta = theta*Power;
-        phi = phi*Power;
-        z.x = Math.sin(theta)*Math.cos(phi);
-        z.y = Math.sin(phi)*Math.sin(theta);
-        z.z = Math.cos(theta);
-        z.scalarMultiply(zr);
-        z.add(pos);
-    }
-    return 0.5*Math.log(r)*r/dr;
-}
-
-
 function animateCamera() {
-    lightAngle += 1.8;
+    //lightAngle += 1.8;
     lightAngle %= 360.0;
     viewAngle += 2;
     viewAngle %= 360.0;
 }
+
+/**
+ * Below are all the vector functions, vec3, Vector3D, whatever you like to call it.
+ */
+function dotProduct(v1, v2) {
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+}
 	
+function length(otherVec) {
+    var part1 = (otherVec.x) * (otherVec.x);
+    var part2 = (otherVec.y) * (otherVec.y);
+    var part3 = (otherVec.z) * (otherVec.z);
+    var underRadical = part1 + part2 + part3;
+    return Math.sqrt(underRadical);
+}
+
+function toRad(r) {
+    return r * Math.PI / 180.0;
+}
+
+function saturate(n) {
+    return clamp(n, 0.0, 1.0);
+}
+
+function clamp(n, min, max) {
+    return Math.max(min, Math.min(n, max));
+}
 
 function FastVec3(x, y, z) {
 
