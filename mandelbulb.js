@@ -18,8 +18,6 @@ var imageData;
 var cHeight;
 var cWidth;
 
-var frameTime;
-
 /* This is the main animation loop, calling the 'draw' method for each line
    When the screen is fully rendered it will call 'animateCamera()' to change the view */
 function startMandelbulb() {
@@ -36,7 +34,6 @@ function startMandelbulb() {
     image = context.getImageData(0, 0, cWidth, cHeight);
     imageData = image.data;
 
-//Before, takes: 3400
     animate();
 }
 
@@ -45,7 +42,6 @@ function animate() {
     if(currenty  == 0) {
         animateCamera();
         setupScene();
-        frameTime = new Date().getTime();
     }
 
     // Draw some lines until we are drawing for N miliseconds, then do a callback
@@ -57,8 +53,6 @@ function animate() {
 
     if(currenty >= cHeight) {
 	currenty = 0;
-        console.log("Took: " + (new Date().getTime() - frameTime));
-	frameTime = new Date().getTime();
     }
 
     image.data = imageData;
@@ -85,12 +79,13 @@ window.requestAnimFrame = (function(callback) {
 /* The 'map' method describes the complete scene (min distance to the closest object) */
 
 var mapZ = [0.0, 0.0, 0.0];
+var NUL = [0.0, 0.0, 0.0];
 function map(z) {
     var scale = (cHeight+cWidth)/5;
     scalarMultiply(setTo(mapZ, z), 1/scale);
 
     return mandelbulb(mapZ) * scale;
-    //return sphere(mapZ, [0.0, 0.0, 0.0], 1) * scale;
+    //return sphere(mapZ, NUL, 1) * scale;
 }
 
 /**
@@ -154,10 +149,7 @@ function setupScene() {
     lightLocation[1] = 50.0;
     lightLocation[2] = lightZ;
 
-    lightDirection[0] = -lightLocation[0];
-    lightDirection[1] = -lightLocation[1];
-    lightDirection[2] = -lightLocation[2];
-    normalize(lightDirection);
+    normalize(subtract(setTo(lightDirection, NUL), lightLocation));
     
     var viewRad = toRad(viewAngle);
     var viewX = ((Math.cos(viewRad) * (DEPTH_OF_FIELD/2)));
@@ -167,10 +159,7 @@ function setupScene() {
     nearFieldLocation[1] = 0.0;
     nearFieldLocation[2] = viewZ;
 
-    viewDirection[0] = -nearFieldLocation[0];
-    viewDirection[1] = -nearFieldLocation[1];
-    viewDirection[2] = -nearFieldLocation[2];
-    normalize(viewDirection);
+    normalize(subtract(setTo(viewDirection, NUL), nearFieldLocation));
 
     //Place eye:
     var eyeDistanceFromNearField = 2000.0;
@@ -185,20 +174,20 @@ function setupScene() {
  */	
 function draw(imageData, y) {
         var cHalfWidth = cWidth/2;
-        var cHalfHeight = cHeight/2;
+        var ny = y - cHeight/2;
+
+        scalarMultiply(crossProduct(turnOrthogonal(setTo(tempViewDirectionY, viewDirection)), viewDirection), ny);
+	turnOrthogonal(setTo(tempViewDirectionX1, viewDirection));
 
     	for(var x=0; x<cWidth; x++) {
         
             var nx = x - cHalfWidth;
-            var ny = y - cHalfHeight;
         
             setTo(pixelLocation, nearFieldLocation);
-            scalarMultiply(turnOrthogonal(setTo(tempViewDirection, viewDirection)), nx);
 
-            add(pixelLocation, tempViewDirection);
-        
-            scalarMultiply(crossProduct(turnOrthogonal(setTo(tempViewDirection, viewDirection)), viewDirection), ny);
-            add(pixelLocation, tempViewDirection);
+            scalarMultiply(setTo(tempViewDirectionX2, tempViewDirectionX1), nx);
+            add(pixelLocation, tempViewDirectionX2);
+            add(pixelLocation, tempViewDirectionY);
         
             setTo(rayLocation, pixelLocation);
         
@@ -220,8 +209,8 @@ function draw(imageData, y) {
                 normalize(rayDirection);
 
                 //Move the pixel location:
-                subtract(setTo(temp, nearFieldLocation), rayLocation);
-                distanceFromCamera = length(temp);
+                distanceFromCamera = length(subtract(setTo(temp, nearFieldLocation), rayLocation));
+
                 if(distanceFromCamera > DEPTH_OF_FIELD) {
                     break;
                 }
@@ -308,7 +297,9 @@ var reverseDirection = [0.0, 0.0, 0.0];
 var eyeLocation = [0.0, 0.0, 0.0];
 var pixelLocation = [0.0, 0.0, 0.0];
 var rayLocation = [0.0, 0.0, 0.0];
-var tempViewDirection = [0.0, 0.0, 0.0];
+var tempViewDirectionX1 = [0.0, 0.0, 0.0];
+var tempViewDirectionX2 = [0.0, 0.0, 0.0];
+var tempViewDirectionY = [0.0, 0.0, 0.0];
 var rayDirection = [0.0, 0.0, 0.0];
 var normal = [0.0, 0.0, 0.0];
 var halfway = [0.0, 0.0, 0.0];
@@ -351,14 +342,6 @@ function animateCamera() {
 function dotProduct(v1, v2) {
     return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 }
-	
-function length(otherVec) {
-    var part1 = (otherVec[0]) * (otherVec[0]);
-    var part2 = (otherVec[1]) * (otherVec[1]);
-    var part3 = (otherVec[2]) * (otherVec[2]);
-    var underRadical = part1 + part2 + part3;
-    return Math.sqrt(underRadical);
-}
 
 function toRad(r) {
     return r * Math.PI / 180.0;
@@ -371,14 +354,13 @@ function saturate(n) {
 function clamp(n, min, max) {
     return Math.max(min, Math.min(n, max));
 }
-
     
-function getNorm(z) {
+function length(z) {
     return Math.sqrt(z[0] * z[0] + z[1] * z[1] + z[2] * z[2]);
 }
 
 function normalize(a) {
-    return scalarMultiply(a, 1 / getNorm(a));
+    return scalarMultiply(a, 1 / length(a));
 }
     
 function scalarMultiply(a, amount) {
