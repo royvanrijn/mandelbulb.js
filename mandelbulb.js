@@ -146,7 +146,7 @@ function setupScene() {
     var lightZ = ((Math.sin(rad) * (DEPTH_OF_FIELD/2)));
     
     lightLocation[0] = lightX;
-    lightLocation[1] = 50.0;
+    lightLocation[1] = (DEPTH_OF_FIELD/2);
     lightLocation[2] = lightZ;
 
     normalize(subtract(setTo(lightDirection, NUL), lightLocation));
