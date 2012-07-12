@@ -28,6 +28,7 @@ function startMandelbulb() {
     var mandelbulbCanvas = document.getElementById('mandelbulb');
     cHeight = mandelbulbCanvas.height;
     cWidth = mandelbulbCanvas.width;
+    DEPTH_OF_FIELD = (cHeight+cWidth)/2;
 
     context = mandelbulbCanvas.getContext("2d");
     context.fillRect(0, 0, cWidth, cHeight);
@@ -35,6 +36,7 @@ function startMandelbulb() {
     image = context.getImageData(0, 0, cWidth, cHeight);
     imageData = image.data;
 
+//Before, takes: 3400
     animate();
 }
 
@@ -49,13 +51,13 @@ function animate() {
     // Draw some lines until we are drawing for N miliseconds, then do a callback
     // This gives the browser some CPU cycles back
     var start = new Date().getTime();
-    while(currenty < cHeight && (new Date().getTime()-start) < 1000) {
+    while(currenty < cHeight && (new Date().getTime()-start) < 500) {
         imageData = draw(imageData, currenty++);
     }
 
     if(currenty >= cHeight) {
 	currenty = 0;
-//        console.log("Took: " + (new Date().getTime() - frameTime));
+        console.log("Took: " + (new Date().getTime() - frameTime));
 	frameTime = new Date().getTime();
     }
 
@@ -82,42 +84,41 @@ window.requestAnimFrame = (function(callback) {
 
 /* The 'map' method describes the complete scene (min distance to the closest object) */
 
-var mapZ = new FastVec3(0.0, 0.0, 0.0);
+var mapZ = [0.0, 0.0, 0.0];
 function map(z) {
     var scale = (cHeight+cWidth)/5;
-    var distance = 99999999999; 
-    mapZ.setTo(z).scalarMultiply(1/scale);
-    distance = Math.min(distance, (mandelbulb(mapZ) * scale));
-    //distance = Math.min(distance, (sphere(mapZ, new FastVec3(0.0, 0.0, 0.0), 1) * scale));
-    return distance;
+    scalarMultiply(setTo(mapZ, z), 1/scale);
+
+    return mandelbulb(mapZ) * scale;
+    //return sphere(mapZ, [0.0, 0.0, 0.0], 1) * scale;
 }
 
 /**
  * The mandelbulb from:
  * http://blog.hvidtfeldts.net/index.php/2011/09/distance-estimated-3d-fractals-v-the-mandelbulb-different-de-approximations/
  */
-var z = new FastVec3(0.0, 0.0, 0.0);
+var z = [0.0, 0.0, 0.0];
 var Iterations = 20.0;
-var Power = 8.0;
+var Power = 8;
 function mandelbulb(pos) {
-    z.setTo(pos);
+    setTo(z, pos);
     var dr = 1.0;
     var r = 0.0;
     for (var i = 0; i < Iterations ; i++) {
         r = length(z);
         if (r>DEPTH_OF_FIELD) break;
 
-        var theta = Math.acos(z.z/r);
-        var phi = Math.atan2(z.y,z.x);
+        var theta = Math.acos(z[2]/r);
+        var phi = Math.atan2(z[1],z[0]);
         dr =  Math.pow( r, Power-1.0)*Power*dr + 1.0;
-        var zr = Math.pow( r,Power);
+        var zr = Math.pow(r,Power);
         theta = theta*Power;
         phi = phi*Power;
-        z.x = Math.sin(theta)*Math.cos(phi);
-        z.y = Math.sin(phi)*Math.sin(theta);
-        z.z = Math.cos(theta);
-        z.scalarMultiply(zr);
-        z.add(pos);
+        var sinTheta = Math.sin(theta);
+        z[0] = sinTheta*Math.cos(phi);
+        z[1] = Math.sin(phi)*sinTheta;
+        z[2] = Math.cos(theta);
+        add(scalarMultiply(z, zr), pos);
     }
     return 0.5*Math.log(r)*r/dr;
 }
@@ -127,7 +128,7 @@ function mandelbulb(pos) {
  * More examples can be found here:
  * http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
  */
-var sphereZ = new FastVec3(0,0,0);
+var sphereZ = [0,0,0];
 function sphere(z, sphereLocation, size) {
     sphereZ.setTo(z).subtract(sphereLocation);
     return length(sphereZ) - size;
@@ -149,33 +150,33 @@ function setupScene() {
     var lightX = ((Math.cos(rad) * (DEPTH_OF_FIELD/2)));
     var lightZ = ((Math.sin(rad) * (DEPTH_OF_FIELD/2)));
     
-    lightLocation.x = lightX;
-    lightLocation.y = 40.0;
-    lightLocation.z = lightZ;
+    lightLocation[0] = lightX;
+    lightLocation[1] = 50.0;
+    lightLocation[2] = lightZ;
 
-    lightDirection.x = -lightLocation.x;
-    lightDirection.y = -lightLocation.y;
-    lightDirection.z = -lightLocation.z;
-    lightDirection.normalize();
+    lightDirection[0] = -lightLocation[0];
+    lightDirection[1] = -lightLocation[1];
+    lightDirection[2] = -lightLocation[2];
+    normalize(lightDirection);
     
     var viewRad = toRad(viewAngle);
     var viewX = ((Math.cos(viewRad) * (DEPTH_OF_FIELD/2)));
     var viewZ = ((Math.sin(viewRad) * (DEPTH_OF_FIELD/2)));
     
-    nearFieldLocation.x = viewX;
-    nearFieldLocation.y = -20.0;
-    nearFieldLocation.z = viewZ;
+    nearFieldLocation[0] = viewX;
+    nearFieldLocation[1] = 0.0;
+    nearFieldLocation[2] = viewZ;
 
-    viewDirection.x = -nearFieldLocation.x;
-    viewDirection.y = -nearFieldLocation.y;
-    viewDirection.z = -nearFieldLocation.z;
-    viewDirection.normalize();
+    viewDirection[0] = -nearFieldLocation[0];
+    viewDirection[1] = -nearFieldLocation[1];
+    viewDirection[2] = -nearFieldLocation[2];
+    normalize(viewDirection);
 
     //Place eye:
     var eyeDistanceFromNearField = 2000.0;
     
-    reverseDirection.setTo(viewDirection).scalarMultiply(eyeDistanceFromNearField);
-    eyeLocation.setTo(nearFieldLocation).subtract(reverseDirection);
+    scalarMultiply(setTo(reverseDirection, viewDirection), eyeDistanceFromNearField);
+    subtract(setTo(eyeLocation, nearFieldLocation), reverseDirection);
 }
 
 /** 
@@ -183,23 +184,25 @@ function setupScene() {
  * Make sure setupScene is called first after adjusting the camera and/or light
  */	
 function draw(imageData, y) {
+        var cHalfWidth = cWidth/2;
+        var cHalfHeight = cHeight/2;
 
     	for(var x=0; x<cWidth; x++) {
         
-            var nx = x - (cWidth/2.0);
-            var ny = y - (cHeight/2.0);
+            var nx = x - cHalfWidth;
+            var ny = y - cHalfHeight;
         
-            pixelLocation.setTo(nearFieldLocation);
+            setTo(pixelLocation, nearFieldLocation);
+            scalarMultiply(turnOrthogonal(setTo(tempViewDirection, viewDirection)), nx);
+
+            add(pixelLocation, tempViewDirection);
         
-            tempViewDirection.setTo(viewDirection).turnOrthogonal().scalarMultiply(nx);
-            pixelLocation.add(tempViewDirection);
+            scalarMultiply(crossProduct(turnOrthogonal(setTo(tempViewDirection, viewDirection)), viewDirection), ny);
+            add(pixelLocation, tempViewDirection);
         
-            tempViewDirection.setTo(viewDirection).turnOrthogonal().crossProduct(viewDirection).scalarMultiply(ny);
-            pixelLocation.add(tempViewDirection);
+            setTo(rayLocation, pixelLocation);
         
-            rayLocation.setTo(pixelLocation);
-        
-            rayDirection.setTo(rayLocation).subtract(eyeLocation).normalize();
+            normalize(subtract(setTo(rayDirection, rayLocation), eyeLocation));
         
             var distanceFromCamera = 0.0;
             var d = map(rayLocation);
@@ -212,12 +215,12 @@ function draw(imageData, y) {
                 }
         	
                 //Increase rayLocation with direction and d:
-                rayLocation.add(rayDirection.scalarMultiply(d));
+                add(rayLocation, scalarMultiply(rayDirection, d));
                 //And reset ray direction:
-                rayDirection.normalize();
+                normalize(rayDirection);
 
                 //Move the pixel location:
-                temp.setTo(nearFieldLocation).subtract(rayLocation);
+                subtract(setTo(temp, nearFieldLocation), rayLocation);
                 distanceFromCamera = length(temp);
                 if(distanceFromCamera > DEPTH_OF_FIELD) {
                     break;
@@ -226,31 +229,37 @@ function draw(imageData, y) {
             }
 
             if(distanceFromCamera < DEPTH_OF_FIELD) {
-        	
-                var locationMinX = map(rayLocation.subtract(smallX));
-                var locationPlusX = map(rayLocation.add(bigX));
-                rayLocation.subtract(smallX);
+
+                rayLocation[0] -= smallStep;
+                var locationMinX = map(rayLocation);
+                rayLocation[0] += bigStep;
+                var locationPlusX = map(rayLocation);
+                rayLocation[0] -= smallStep;
             	
-                var locationMinY = map(rayLocation.subtract(smallY));
-                var locationPlusY = map(rayLocation.add(bigY));
-                rayLocation.subtract(smallY);
-    
-                var locationMinZ = map(rayLocation.subtract(smallZ));
-                var locationPlusZ = map(rayLocation.add(bigZ));
-                rayLocation.subtract(smallZ);
-            	
+                rayLocation[1] -= smallStep;
+                var locationMinY = map(rayLocation);
+                rayLocation[1] += bigStep;
+                var locationPlusY = map(rayLocation);
+                rayLocation[1] -= smallStep;
+
+                rayLocation[2] -= smallStep;
+                var locationMinZ = map(rayLocation);
+                rayLocation[2] += bigStep;
+                var locationPlusZ = map(rayLocation);
+                rayLocation[2] -= smallStep;
+
             	//Calculate the normal:
-                normal.x = (locationMinX - locationPlusX); 
-                normal.y = (locationMinY - locationPlusY); 
-                normal.z = (locationMinZ - locationPlusZ); 
-                normal.normalize();
+                normal[0] = (locationMinX - locationPlusX); 
+                normal[1] = (locationMinY - locationPlusY); 
+                normal[2] = (locationMinZ - locationPlusZ); 
+                normalize(normal);
             	
             	//Calculate the ambient light:
                 var dotNL = dotProduct(lightDirection, normal);
                 var diff = saturate(dotNL);
             	
                 //Calculate specular light:
-                halfway.setTo(rayDirection).add(lightDirection).normalize();
+                normalize(add(setTo(halfway, rayDirection), lightDirection));
     
                 var dotNH = dotProduct(halfway, normal);
                 var spec = Math.pow(saturate(dotNH),35);
@@ -266,20 +275,15 @@ function draw(imageData, y) {
                 green = clamp(green, 0, 255.0);
                 blue = clamp(blue, 0, 255.0);
             
-                var pixels = (y*cWidth) + x;
-                imageData[4*pixels+0] = red;
-                imageData[4*pixels+1] = green;
-                imageData[4*pixels+2] = blue;
-//                imageData[4*pixels+3] = 255;
-
+                var pixels = 4 * ((y*cWidth) + x);
+                imageData[pixels+0] = red;
+                imageData[pixels+1] = green;
+                imageData[pixels+2] = blue;
             } else {
-
-                var pixels = (y*cWidth) + x;
-                imageData[4*pixels+0] = 155+clamp(iterations*1.5, 0.0, 100.0);
-                imageData[4*pixels+1] = 205+clamp(iterations*1.5, 0.0, 50.0);
-                imageData[4*pixels+2] = 255;
-//                imageData[4*pixels+3] = 255;
-        	
+                var pixels = 4 * ((y*cWidth) + x);
+                imageData[pixels+0] = 155+clamp(iterations*1.5, 0.0, 100.0);
+                imageData[pixels+1] = 205+clamp(iterations*1.5, 0.0, 50.0);
+                imageData[pixels+2] = 255;
             }
         }
     return imageData;
@@ -288,33 +292,29 @@ function draw(imageData, y) {
 var halfPixel = Math.sqrt(2.0)/2.0;
 
 var MAX_ITER = 5000.0;
-var DEPTH_OF_FIELD = 1000.0;
+var DEPTH_OF_FIELD = 600.0;
 
 var lightAngle = 140.0;
 var viewAngle = 150.0;
 
-var smallX = new FastVec3(0.01,0,0);
-var smallY = new FastVec3(0,0.01,0);
-var smallZ = new FastVec3(0.0, 0.0, 0.01);
-var bigX = new FastVec3(0.02,0,0);
-var bigY = new FastVec3(0,0.02,0);
-var bigZ = new FastVec3(0.0, 0.0, 0.02);
+var smallStep = 0.01;
+var bigStep = 0.02;
 
-var lightLocation = new FastVec3(0.0, 0.0, 0.0);
-var lightDirection = new FastVec3(0.0, 0.0, 0.0);
-var nearFieldLocation = new FastVec3(0.0, 0.0, 0.0);
-var viewDirection = new FastVec3(0.0, 0.0, 0.0);
-var reverseDirection = new FastVec3(0.0, 0.0, 0.0);
-var eyeLocation = new FastVec3(0.0, 0.0, 0.0);
-var pixelLocation = new FastVec3(0.0, 0.0, 0.0);
-var rayLocation = new FastVec3(0.0, 0.0, 0.0);
-var tempViewDirection = new FastVec3(0.0, 0.0, 0.0);
-var rayDirection = new FastVec3(0.0, 0.0, 0.0);
-var normal = new FastVec3(0.0, 0.0, 0.0);
-var halfway = new FastVec3(0.0, 0.0, 0.0);
-var temp = new FastVec3(0.0, 0.0, 0.0);
-var ro = new FastVec3(0.0, 0.0, 0.0);
-var rd = new FastVec3(0.0, 0.0, 0.0);
+var lightLocation = [0.0, 0.0, 0.0];
+var lightDirection = [0.0, 0.0, 0.0];
+var nearFieldLocation = [0.0, 0.0, 0.0];
+var viewDirection = [0.0, 0.0, 0.0];
+var reverseDirection = [0.0, 0.0, 0.0];
+var eyeLocation = [0.0, 0.0, 0.0];
+var pixelLocation = [0.0, 0.0, 0.0];
+var rayLocation = [0.0, 0.0, 0.0];
+var tempViewDirection = [0.0, 0.0, 0.0];
+var rayDirection = [0.0, 0.0, 0.0];
+var normal = [0.0, 0.0, 0.0];
+var halfway = [0.0, 0.0, 0.0];
+var temp = [0.0, 0.0, 0.0];
+var ro = [0.0, 0.0, 0.0];
+var rd = [0.0, 0.0, 0.0];
 
 /**
  * In this method we calculate the 'soft' shadows
@@ -323,8 +323,8 @@ var rd = new FastVec3(0.0, 0.0, 0.0);
 function shadow(mint, maxt, k) {
     var res = 1.0;
     for(var t=mint; t < maxt; ) {
-        rd.setTo(lightDirection).scalarMultiply(t);
-        ro.setTo(rayLocation).subtract(rd);
+        scalarMultiply(setTo(rd, lightDirection), t);
+        subtract(setTo(ro, rayLocation), rd);
         var h = map(ro);
         if( h < 0.001) {
             return 0.0;
@@ -349,13 +349,13 @@ function animateCamera() {
  * Below are all the vector functions, vec3, Vector3D, whatever you like to call it.
  */
 function dotProduct(v1, v2) {
-    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
 }
 	
 function length(otherVec) {
-    var part1 = (otherVec.x) * (otherVec.x);
-    var part2 = (otherVec.y) * (otherVec.y);
-    var part3 = (otherVec.z) * (otherVec.z);
+    var part1 = (otherVec[0]) * (otherVec[0]);
+    var part2 = (otherVec[1]) * (otherVec[1]);
+    var part3 = (otherVec[2]) * (otherVec[2]);
     var underRadical = part1 + part2 + part3;
     return Math.sqrt(underRadical);
 }
@@ -365,81 +365,70 @@ function toRad(r) {
 }
 
 function saturate(n) {
-    return clamp(n, 0.0, 1.0);
+    return clampVec(n, 0.0, 1.0);
 }
 
 function clamp(n, min, max) {
     return Math.max(min, Math.min(n, max));
 }
 
-function FastVec3(x, y, z) {
-
-    this.x = x;
-    this.y = y;
-    this.z = z;
     
-    this.getNorm = function() {
-        return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
-    }
+function getNorm(z) {
+    return Math.sqrt(z[0] * z[0] + z[1] * z[1] + z[2] * z[2]);
+}
 
-    this.normalize = function() {
-        return this.scalarMultiply(1 / this.getNorm());
-    }
+function normalize(a) {
+    return scalarMultiply(a, 1 / getNorm(a));
+}
     
-    this.scalarMultiply = function(amount) {
-        this.x *= amount;
-        this.y *= amount;
-        this.z *= amount;
-        return this;
-    }
+function scalarMultiply(a, amount) {
+    a[0] *= amount;
+    a[1] *= amount;
+    a[2] *= amount;
+    return a;
+}
 	
-    this.add = function(v1) {	
-        this.x += v1.x;
-        this.y += v1.y;
-        this.z += v1.z;
-        return this;
-    }
+function add(v1, v2) {	
+    v1[0] += v2[0];
+    v1[1] += v2[1];
+    v1[2] += v2[2];
+    return v1;
+}
     
-    this.subtract = function(v1) {
-        this.x -= v1.x;
-        this.y -= v1.y;
-        this.z -= v1.z;
-        return this;
-    }
+function subtract(v1, v2) {
+    v1[0] -= v2[0];
+    v1[1] -= v2[1];
+    v1[2] -= v2[2];
+    return v1;
+}
 
-    this.setTo = function(toMirror) {
-        this.x = toMirror.x;
-        this.y = toMirror.y;
-        this.z = toMirror.z;
-        return this;
-    }
+function setTo(v1, v2) {
+    v1[0] = v2[0];
+    v1[1] = v2[1];
+    v1[2] = v2[2];
+    return v1;
+}
 
-    this.turnOrthogonal = function() {    
-        var inverse = 1.0 / Math.sqrt(this.x * this.x + this.z * this.z);
-        var oldX = this.x;
-        this.x = -inverse * this.z;
-        this.z = inverse * oldX;
-        return this;
-    }
+function turnOrthogonal(v1) {    
+    var inverse = 1.0 / Math.sqrt(v1[0] * v1[0] + v1[2] * v1[2]);
+    var oldX = v1[0];
+    v1[0] = -inverse * v1[2];
+    v1[2] = inverse * oldX;
+    return v1;
+}
 
-    this.crossProduct = function(v1) {
-        var oldX = this.x;
-        var oldY = this.y;
-        var oldZ = this.z;
-        this.x = v1.y * oldZ - v1.z * oldY;
-        this.y = v1.z * oldX - v1.x * oldZ;
-        this.z = v1.x * oldY - v1.y * oldX;
-        return this;
-    }
+function crossProduct(v1, v2) {
+    var oldX = v1[0];
+    var oldY = v1[1];
+    v1[0] = v2[1] * v1[2] - v2[2] * oldY;
+    v1[1] = v2[2] * oldX - v2[0] * v1[2];
+    v1[2] = v2[0] * oldY - v2[1] * oldX;
+    return v1;
+}
     
-    this.clamp = function(i, min, max) {
-        return Math.max(min, Math.min(i, max));
-    }
-    
-    this.clamp = function(min, max) {
-        this.x  = clamp(this.x, min, max);
-        this.y  = clamp(this.y, min, max);
-        this.z  = clamp(this.z, min, max);
-        return this;
-    }
+function clampVec(v1, min, max) {
+    v1[0]  = clamp(v1[0], min, max);
+    v1[1]  = clamp(v1[1], min, max);
+    v1[2]  = clamp(v1[2], min, max);
+    return v1;
 }
