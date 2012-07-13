@@ -26,10 +26,14 @@ function startMandelbulb() {
     var mandelbulbCanvas = document.getElementById('mandelbulb');
     cHeight = mandelbulbCanvas.height;
     cWidth = mandelbulbCanvas.width;
-    DEPTH_OF_FIELD = (cHeight+cWidth)/2;
 
     context = mandelbulbCanvas.getContext("2d");
     context.fillRect(0, 0, cWidth, cHeight);
+
+    //With a depth of field of 2.0x2.0 we calculate the pixel detail
+    //This isn't using aspect ratio, nor real perspective
+    pixel = DEPTH_OF_FIELD/((cHeight+cWidth)/2);
+    halfPixel = pixel/2;
 
     image = context.getImageData(0, 0, cWidth, cHeight);
     imageData = image.data;
@@ -37,6 +41,7 @@ function startMandelbulb() {
     animate();
 }
 
+var f = new Date().getTime();
 function animate() {
 
     if(currenty  == 0) {
@@ -53,6 +58,8 @@ function animate() {
 
     if(currenty >= cHeight) {
 	currenty = 0;
+        console.log("Took:"+(new Date().getTime()-f));
+        f = new Date().getTime();
     }
 
     image.data = imageData;
@@ -78,14 +85,10 @@ window.requestAnimFrame = (function(callback) {
 
 /* The 'map' method describes the complete scene (min distance to the closest object) */
 
-var mapZ = [0.0, 0.0, 0.0];
 var NUL = [0.0, 0.0, 0.0];
 function map(z) {
-    var scale = (cHeight+cWidth)/5;
-    scalarMultiply(setTo(mapZ, z), 1/scale);
-
-    return mandelbulb(mapZ) * scale;
-    //return sphere(mapZ, NUL, 1) * scale;
+    return mandelbulb(z);
+    //return sphere(z, NUL, 1);
 }
 
 /**
@@ -161,9 +164,6 @@ function setupScene() {
 
     normalize(subtract(setTo(viewDirection, NUL), nearFieldLocation));
 
-    //Place eye:
-    var eyeDistanceFromNearField = 2000.0;
-    
     scalarMultiply(setTo(reverseDirection, viewDirection), eyeDistanceFromNearField);
     subtract(setTo(eyeLocation, nearFieldLocation), reverseDirection);
 }
@@ -176,7 +176,7 @@ function draw(imageData, y) {
         var cHalfWidth = cWidth/2;
         var ny = y - cHeight/2;
 
-        scalarMultiply(crossProduct(turnOrthogonal(setTo(tempViewDirectionY, viewDirection)), viewDirection), ny);
+        scalarMultiply(crossProduct(turnOrthogonal(setTo(tempViewDirectionY, viewDirection)), viewDirection), ny*(halfPixel*2));
 	turnOrthogonal(setTo(tempViewDirectionX1, viewDirection));
 
     	for(var x=0; x<cWidth; x++) {
@@ -185,7 +185,7 @@ function draw(imageData, y) {
         
             setTo(pixelLocation, nearFieldLocation);
 
-            scalarMultiply(setTo(tempViewDirectionX2, tempViewDirectionX1), nx);
+            scalarMultiply(setTo(tempViewDirectionX2, tempViewDirectionX1), nx*(halfPixel*2));
             add(pixelLocation, tempViewDirectionX2);
             add(pixelLocation, tempViewDirectionY);
         
@@ -278,10 +278,13 @@ function draw(imageData, y) {
     return imageData;
 }
 
-var halfPixel = Math.sqrt(2.0)/2.0;
 
 var MAX_ITER = 5000.0;
-var DEPTH_OF_FIELD = 600.0;
+var DEPTH_OF_FIELD = 2.0;
+var eyeDistanceFromNearField = 2.5;
+
+var halfPixel;
+var pixel;
 
 var lightAngle = 140.0;
 var viewAngle = 150.0;
@@ -330,9 +333,9 @@ function shadow(mint, maxt, k) {
  * Here we change the camera position and light(s)
  */
 function animateCamera() {
-    //lightAngle += 1.8;
+    lightAngle += 2.0;
     lightAngle %= 360.0;
-    viewAngle += 2;
+    viewAngle += 2.0;
     viewAngle %= 360.0;
 }
 
