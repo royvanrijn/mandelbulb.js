@@ -32,7 +32,7 @@ function startMandelbulb() {
 
     //With a depth of field of 2.0x2.0 we calculate the pixel detail
     //This isn't using aspect ratio, nor real perspective
-    pixel = DEPTH_OF_FIELD/((cHeight+cWidth)/2);
+    pixel = (DEPTH_OF_FIELD)/((cHeight+cWidth)/2);
     halfPixel = pixel/2;
 
     image = context.getImageData(0, 0, cWidth, cHeight);
@@ -145,8 +145,8 @@ function sphere(z, sphereLocation, size) {
 function setupScene() {
 
     var rad = toRad(lightAngle);
-    var lightX = ((Math.cos(rad) * (DEPTH_OF_FIELD/2)));
-    var lightZ = ((Math.sin(rad) * (DEPTH_OF_FIELD/2)));
+    var lightX = ((Math.cos(rad) * DEPTH_OF_FIELD/2));
+    var lightZ = ((Math.sin(rad) * DEPTH_OF_FIELD/2));
     
     lightLocation[0] = lightX;
     lightLocation[1] = (DEPTH_OF_FIELD/2);
@@ -155,8 +155,8 @@ function setupScene() {
     normalize(subtract(setTo(lightDirection, NUL), lightLocation));
     
     var viewRad = toRad(viewAngle);
-    var viewX = ((Math.cos(viewRad) * (DEPTH_OF_FIELD/2)));
-    var viewZ = ((Math.sin(viewRad) * (DEPTH_OF_FIELD/2)));
+    var viewX = ((Math.cos(viewRad) * DEPTH_OF_FIELD/2));
+    var viewZ = ((Math.sin(viewRad) * DEPTH_OF_FIELD/2));
     
     nearFieldLocation[0] = viewX;
     nearFieldLocation[1] = 0.0;
@@ -176,16 +176,16 @@ function draw(imageData, y) {
         var cHalfWidth = cWidth/2;
         var ny = y - cHeight/2;
 
-        scalarMultiply(crossProduct(turnOrthogonal(setTo(tempViewDirectionY, viewDirection)), viewDirection), ny*(halfPixel*2));
+        scalarMultiply(crossProduct(turnOrthogonal(setTo(tempViewDirectionY, viewDirection)), viewDirection), ny*pixel);
 	turnOrthogonal(setTo(tempViewDirectionX1, viewDirection));
 
     	for(var x=0; x<cWidth; x++) {
         
-            var nx = x - cHalfWidth;
+            var nx = x - cHalfWidth; 
         
             setTo(pixelLocation, nearFieldLocation);
 
-            scalarMultiply(setTo(tempViewDirectionX2, tempViewDirectionX1), nx*(halfPixel*2));
+            scalarMultiply(setTo(tempViewDirectionX2, tempViewDirectionX1), nx*pixel);
             add(pixelLocation, tempViewDirectionX2);
             add(pixelLocation, tempViewDirectionY);
         
@@ -217,7 +217,7 @@ function draw(imageData, y) {
                 d = map(rayLocation);
             }
 
-            if(distanceFromCamera < DEPTH_OF_FIELD) {
+            if(distanceFromCamera < DEPTH_OF_FIELD && distanceFromCamera > 0) {
 
                 rayLocation[0] -= smallStep;
                 var locationMinX = map(rayLocation);
@@ -242,7 +242,7 @@ function draw(imageData, y) {
                 normal[1] = (locationMinY - locationPlusY); 
                 normal[2] = (locationMinZ - locationPlusZ); 
                 normalize(normal);
-            	
+            
             	//Calculate the ambient light:
                 var dotNL = dotProduct(lightDirection, normal);
                 var diff = saturate(dotNL);
@@ -280,8 +280,8 @@ function draw(imageData, y) {
 
 
 var MAX_ITER = 5000.0;
-var DEPTH_OF_FIELD = 2.0;
-var eyeDistanceFromNearField = 2.5;
+var DEPTH_OF_FIELD = 2.5;
+var eyeDistanceFromNearField = 2.2;
 
 var halfPixel;
 var pixel;
